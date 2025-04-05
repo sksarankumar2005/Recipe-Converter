@@ -1,0 +1,16 @@
+Metadata-Version: 2.2
+Name: recipeconverter
+Version: 2.0.0
+Summary: A tool to convert baking ingredients from volume to weight
+Home-page: https://github.com/justinmklam/recipe-converter
+Author: Justin Lam
+Author-email: contact@justinmklam.com
+License-File: LICENSE
+Requires-Dist: flask
+Requires-Dist: gunicorn
+Requires-Dist: recipe-scrapers
+Dynamic: author
+Dynamic: author-email
+Dynamic: home-page
+Dynamic: requires-dist
+Dynamic: summary

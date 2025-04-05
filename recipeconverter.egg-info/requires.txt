@@ -1,0 +1,3 @@
+flask
+gunicorn
+recipe-scrapers

@@ -1,0 +1,15 @@
+LICENSE
+MANIFEST.in
+README.md
+setup.py
+recipeconverter/__init__.py
+recipeconverter/gram-conversions.csv
+recipeconverter/utils.py
+recipeconverter.egg-info/PKG-INFO
+recipeconverter.egg-info/SOURCES.txt
+recipeconverter.egg-info/dependency_links.txt
+recipeconverter.egg-info/not-zip-safe
+recipeconverter.egg-info/requires.txt
+recipeconverter.egg-info/top_level.txt
+tests/test_parsing.py
+tests/test_utils.py
