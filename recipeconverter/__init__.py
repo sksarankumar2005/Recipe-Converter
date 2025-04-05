@@ -1,14 +1,9 @@
-import sys
-import os
 import csv
+import os
 import re
 from recipe_scrapers import scrape_me
+from recipeconverter import utils
 
-# Ensure the package directory is in the system path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# Now import utils correctly
-from . import utils  
 
 def import_conversions(filename) -> list:
     """Import ingredient conversion table
@@ -16,8 +11,7 @@ def import_conversions(filename) -> list:
     Returns:
         list: List of dicts (ingredient, cup, tablespoon, teaspoon)
     """
-
-    with open(filename, encoding="utf-8") as csvfile:
+    with open(filename) as csvfile:
         conversion_table = list(csv.reader(csvfile, delimiter=","))
 
     # Remove header
@@ -51,61 +45,32 @@ class RecipeConverter:
         database_path = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), "gram-conversions.csv"
         )
-
         self._conversion_table = import_conversions(database_path)
 
     def convert_recipe_from_url(self, url: str, multiplier=1.0) -> tuple:
-        """Convert recipe from URL, if supported
-
-        Args:
-            url (str): Recipe URL
-            multiplier (float, optional): Recipe scale factor. Defaults to 1.0.
-
-        Returns:
-            tuple (str): Output recipe
-            tuple (recipe_scrapers.allrecipes.AllRecipes): Recipe scraper object
-        """
-
+        """Convert recipe from URL, if supported"""
         scraper = scrape_me(url)
-
         ingredients = "\n".join(scraper.ingredients())
-
         return self.convert_recipe(ingredients, multiplier), scraper
 
     def convert_recipe(self, recipe: str, multiplier=1.0) -> str:
-        """Convert a multi-line recipe from volumetric units to mass units
-
-        Args:
-            recipe (str): Input recipe
-            multiplier (float, optional): Recipe scale factor. Defaults to 1.0.
-
-        Returns:
-            str: Output recipe
-        """
+        """Convert a multi-line recipe from volumetric units to mass units"""
         output = ""
         for line in recipe.split("\n"):
             try:
                 output += self.convert_volume_to_mass(line, multiplier) + "\n"
-            except (ValueError, KeyError, TypeError) as e:
-                print(f"Could not convert: '{line}''")
+            except Exception as e:
+                print(f"Could not convert: '{line}'")
                 print(repr(e))
                 output += line + "\n"
-
         return output.strip()
 
     def convert_volume_to_mass(self, line: str, multiplier=1.0) -> str:
-        """Convert ingredient line from volume to mass.
-
-        Also converts imperial weight to metric (ie. ounce or pounds)
-
-        Args:
-            line (str): ie. "1 cup flour"
-            multiplier (float, optional): Scale factor to multiply ingredient by
-
-        Returns:
-            str: Converted line, ie. "120.0 g flour
-        """
+        """Convert ingredient line from volume to mass (grams)"""
         amount, unit, ingredient = self.extract_from_line(line.lower())
+
+        if not all([amount, ingredient]):
+            raise ValueError(f"Could not parse line: '{line}'")
 
         amount = utils.fraction_to_float(amount)
 
@@ -125,24 +90,11 @@ class RecipeConverter:
         else:
             amount_converted = round(amount_converted, 1)
 
-        # Incompatible ingredients won't have an associated unit
-        if unit:
-            unit_out = f" {unit} "
-        else:
-            unit_out = " "
-
+        unit_out = f" {unit} " if unit else " "
         return f"{amount_converted}{unit_out}{ingredient}"
 
     def get_ingredient_conversion(self, ingredient: str, unit: str) -> float:
-        """Get conversion factor for the given ingredient
-
-        Args:
-            ingredient (str): ie. Flour, sugar, etc.
-            unit (str): Cup, tablespoon, or teaspoon
-
-        Returns:
-            float: Conversion factor from unit to grams
-        """
+        """Get conversion factor for the given ingredient and unit"""
         ingredient_found = False
 
         for conversion_line in self._conversion_table:
@@ -161,40 +113,36 @@ class RecipeConverter:
 
     @staticmethod
     def extract_from_line(line: str) -> tuple:
-        """Extract components from ingredient line
-
-        Args:
-            line (str): Input line, ie. "1 1/2 cup brown sugar"
-
-        Returns:
-            tuple (str): Amount (ie. "1 1/2")
-            tuple (str): Unit (ie. "cup"), or "" if no units (ie. "1 banana")
-            tuple (str): Ingredient (ie. "brown sugar")
-        """
+        """Extract amount, unit, and ingredient from a recipe line"""
         compatible_units = ["cup", "tablespoon", "teaspoon", "ounce", "pound"]
         regex_compatible = r"(.+?)(cup|tablespoon|teaspoon|ounce|pound)(?:s|)(.*)"
-        regex_incompatible = r"(.+?)(?=[a-zA-z])(.*)"
+        regex_incompatible = r"(.+?)(?=[a-zA-Z])(.*)"
 
+        # Normalize unit names
         line = line.replace("tbsp", "tablespoon")
         line = line.replace("tsp", "teaspoon")
         line = line.replace("oz", "ounce")
         line = line.replace("lbs", "pound")
         line = line.replace("lb", "pound")
 
-        if any(x in line for x in compatible_units):
-            p = re.compile(regex_compatible)
-            m = p.findall(line)
+        try:
+            if any(x in line for x in compatible_units):
+                m = re.findall(regex_compatible, line)
+                if not m:
+                    raise ValueError("No compatible unit match found.")
+                amount = m[0][0].strip()
+                unit = m[0][1].strip()
+                ingredient = m[0][2].strip()
+            else:
+                m = re.findall(regex_incompatible, line)
+                if not m:
+                    raise ValueError("No fallback match found.")
+                amount = m[0][0].strip()
+                unit = ""
+                ingredient = m[0][1].strip()
 
-            amount = m[0][0].strip()
-            unit = m[0][1].strip()
-            ingredient = m[0][2].strip()
+            return amount, unit, ingredient
 
-        else:
-            p = re.compile(regex_incompatible)
-            m = p.findall(line)
-
-            amount = m[0][0].strip()
-            unit = ""
-            ingredient = m[0][1].strip()
-
-        return amount, unit, ingredient
+        except Exception as e:
+            print(f"[extract_from_line ERROR] Line: '{line}' | {repr(e)}")
+            return None, None, None
